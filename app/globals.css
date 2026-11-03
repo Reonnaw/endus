@@ -1,26 +1,150 @@
 @import "tailwindcss";
 
+/* Ompreng world: moss bar over brushed steel; panels are compartments pressed into a tray. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  color-scheme: light;
+  --ground: #e4e9e1;
+  --tray: #edf1ea;
+  --tray-edge: #c7cfc2;
+  --well: #f8faf6;
+  --well-rim: #ffffff;
+  --well-shade: rgb(40 56 32 / 0.13);
+  --grain: rgb(255 255 255 / 0.05);
+  --ink: #17200f;
+  --ink-2: #455040;
+  --muted: #5b6655;
+  --line: #d3dacd;
+  --moss: #4a6026;
+  --moss-deep: #34451a;
+  --moss-soft: #dde6cc;
+  --on-moss: #f6f9ef;
+  --on-moss-2: #d3dfbd;
+  --ok: #3b7a1e;
+  --ok-wash: #e2eed3;
+  --warn: #855600;
+  --warn-mark: #c98a00;
+  --warn-wash: #f5e9c8;
+  --bad: #ad3524;
+  --bad-wash: #f5dad3;
+  --idle: #6f7a68;
+  --idle-wash: #e7ebe3;
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --s4: #eda100;
+  --s5: #e87ba4;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: dark;
+    --ground: #11150e;
+    --tray: #171d13;
+    --tray-edge: #2a3323;
+    --well: #1c2318;
+    --well-rim: #262f20;
+    --well-shade: rgb(0 0 0 / 0.45);
+    --grain: rgb(255 255 255 / 0.018);
+    --ink: #e7ecde;
+    --ink-2: #bcc5af;
+    --muted: #9ca790;
+    --line: #2f3a28;
+    --moss: #33461a;
+    --moss-deep: #a9c27a;
+    --moss-soft: #263219;
+    --on-moss: #eef4e2;
+    --on-moss-2: #b8c99a;
+    --ok: #93c86c;
+    --ok-wash: #1f2d16;
+    --warn: #e5b04a;
+    --warn-mark: #e5b04a;
+    --warn-wash: #2f2712;
+    --bad: #f08573;
+    --bad-wash: #341a14;
+    --idle: #9ca790;
+    --idle-wash: #20271b;
+    --s1: #3987e5;
+    --s2: #d95926;
+    --s3: #199e70;
+    --s4: #c98500;
+    --s5: #d55181;
   }
 }
 
+@theme inline {
+  --color-ground: var(--ground);
+  --color-tray: var(--tray);
+  --color-well: var(--well);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-moss: var(--moss);
+  --color-moss-deep: var(--moss-deep);
+  --color-moss-soft: var(--moss-soft);
+  --color-on-moss: var(--on-moss);
+  --color-on-moss-2: var(--on-moss-2);
+  --color-ok: var(--ok);
+  --color-ok-wash: var(--ok-wash);
+  --color-warn: var(--warn);
+  --color-warn-mark: var(--warn-mark);
+  --color-warn-wash: var(--warn-wash);
+  --color-bad: var(--bad);
+  --color-bad-wash: var(--bad-wash);
+  --color-idle: var(--idle);
+  --color-idle-wash: var(--idle-wash);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--ground);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--moss-soft);
+  color: var(--ink);
+}
+
+html {
+  scrollbar-color: var(--tray-edge) var(--ground);
+  scroll-padding-top: 7.5rem; /* sticky bar + phone section nav */
+}
+@media (min-width: 48rem) {
+  html { scroll-padding-top: 5rem; }
+}
+
+:focus-visible {
+  outline: 2px solid var(--moss);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@layer components {
+  /* The tray plate: one raised stainless sheet with a faint brushed grain. */
+  .tray {
+    background:
+      repeating-linear-gradient(90deg, var(--grain) 0 1px, transparent 1px 3px),
+      var(--tray);
+    border: 1px solid var(--tray-edge);
+    border-radius: 28px;
+    padding: 10px;
+    box-shadow: 0 1px 0 rgb(255 255 255 / 0.5) inset, 0 10px 28px -16px rgb(30 45 20 / 0.35);
+  }
+  /* A compartment pressed into the tray. */
+  .well {
+    background: var(--well);
+    border-radius: 20px;
+    box-shadow:
+      inset 0 2px 5px var(--well-shade),
+      inset 0 -1px 0 var(--well-rim),
+      0 1px 0 var(--well-rim);
+    transition: background-color 400ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }
