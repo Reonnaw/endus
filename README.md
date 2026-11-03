@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ENDUS Dashboard
 
-## Getting Started
+Web dashboard for the ENDUS electronic nose (ESP32 + 8 MQ sensors + DHT11, firmware `main.ino`).
+Data path: ESP32 → MQTT `i2aspo/<dev>/telemetry` → EMQX → `POST /api/ingest` → Supabase → dashboard (refreshes every 5 s).
 
-First, run the development server:
+## Setup
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. **Supabase**: run `supabase/schema.sql` in the SQL editor.
+2. **Env**: copy `.env.example` to `.env.local` and fill it in.
+3. **EMQX** (Rule Engine / Data Integration):
+   - Rule SQL: `SELECT payload FROM "i2aspo/+/telemetry"`
+   - Action: HTTP Server, `POST https://<domain>/api/ingest`
+   - Headers: `Content-Type: application/json`, `Authorization: Bearer <INGEST_TOKEN>`
+   - Body: `${payload}`
+4. `pnpm install && pnpm dev`, then open http://localhost:3000. Use `?dev=i2aspo-XXXXXX` to pick a device; otherwise the latest active one is shown.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Calibration (required)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+MQ sensors only give a resistance, so concentrations need a clean-air baseline per device.
+Switch the device on with no food, wait for the 10-minute preheat, then press **Kalibrasi udara bersih**
+on the dashboard (token = `CALIBRATE_TOKEN`). Repeat whenever a sensor is replaced or readings drift.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## How the status is decided
 
-## Learn More
+- Response per sensor `S = Rs_air / Rs − 1` (same feature as Eq. 1 in the paper).
+- Status uses MQ-2, MQ-3, MQ-7, MQ-8 and MQ-135. MQ-4/5/6 (fuel gases) are shown as info only.
+- Highest S: `< 0.5` **Layak**, `0.5–1.5` **Waspada**, `≥ 1.5` **Tidak layak** (`lib/enose.ts`, `THRESHOLD`).
+  These are provisional and should be replaced with cut-offs from the lab-labelled data.
+- ppm values come from the datasheet curves (`ppm = a·(Rs/R0)^b`). They are estimates because MQ sensors are cross-sensitive.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`pnpm test` checks the sensor math.
