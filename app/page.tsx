@@ -1,6 +1,8 @@
 import { Suspense } from "react";
-import { analyse, SENSORS, THRESHOLD, type GasRow, type Verdict } from "@/lib/enose";
-import { select, type Reading } from "@/lib/supabase";
+import { SENSORS, THRESHOLD, type GasRow, type Verdict } from "@/lib/enose";
+import { countsOf, getDashboardData, PAGE_SIZE, RANGES, type RangeKey } from "@/lib/queries";
+import { computeStatus } from "@/lib/status";
+import type { DeviceStatus, Reading, Session } from "@/lib/supabase";
 import { AutoRefresh, CalibrateForm, LineChart, type Series } from "./client";
 import { Icon, Logo, type IconName } from "./icons";
 
@@ -10,7 +12,7 @@ const VERDICT: Record<Verdict, { title: string; text: string; icon: IconName; to
   waspada: { title: "Waspada", text: "Gas penanda pembusukan mulai naik. Sajikan segera, jangan disimpan lebih lama.", icon: "alert", tone: "warn", level: 2 },
   tidak_layak: { title: "Tidak layak", text: "Pola gas menunjukkan risiko pembusukan. Jangan disajikan.", icon: "stop", tone: "bad", level: 3 },
   pemanasan: { title: "Sensor pemanasan", text: "Sensor MQ butuh 10 menit pemanasan sebelum hasilnya bisa dipakai.", icon: "hourglass", tone: "idle", level: 0 },
-  belum_kalibrasi: { title: "Belum dikalibrasi", text: "Taruh alat di udara bersih tanpa makanan, tunggu pemanasan selesai, lalu kalibrasi di bagian Kesehatan alat.", icon: "help", tone: "idle", level: 0 },
+  belum_kalibrasi: { title: "Kalibrasi belum dilakukan", text: "Taruh alat di udara bersih tanpa makanan, tunggu pemanasan selesai, lalu kalibrasi di bagian Alat.", icon: "help", tone: "idle", level: 0 },
   sensor_error: { title: "Sensor tidak terbaca", text: "Satu atau lebih sensor gas tidak mengirim data. Cek kabel ADS1115 dan modul MQ.", icon: "alert", tone: "bad", level: 0 },
 };
 const TONE = {
@@ -78,37 +80,42 @@ export default function Page({ searchParams }: PageProps<"/">) {
 }
 
 async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
-  const { dev } = await searchParams;
-  const filter = typeof dev === "string" ? `&device=eq.${encodeURIComponent(dev)}` : "";
-  const [latest] = await select<Reading>(`readings?select=*${filter}&order=ts.desc&limit=1`);
-  if (!latest) return <Empty />;
+  const raw = await searchParams;
+  const sp: Params = Object.fromEntries(Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === "string"));
+  const range: RangeKey = sp.range && sp.range in RANGES ? (sp.range as RangeKey) : "1h";
+  const page = Math.max(1, Math.floor(Number(sp.hal)) || 1);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.tgl ?? "") ? sp.tgl : undefined;
+  const sessionId = /^[0-9a-f-]{36}$/i.test(sp.sesi ?? "") ? sp.sesi : undefined;
+  const data = await getDashboardData(sp.dev, { range, page: page - 1, date, sessionId });
+  if (!data) return <Empty />;
 
-  const device = encodeURIComponent(latest.device);
-  const [history, [cal]] = await Promise.all([
-    select<Pick<Reading, "ts" | "counts" | "temp_c" | "humidity" | "preheated">>(
-      `readings?select=ts,counts,temp_c,humidity,preheated&device=eq.${device}&order=ts.desc&limit=720`,
-    ),
-    select<{ rs_air: number[]; created_at: string }>(`calibrations?select=rs_air,created_at&device=eq.${device}&order=created_at.desc&limit=1`),
-  ]);
-  history.reverse();
-  const rsAir = cal?.rs_air ?? null;
-
-  const now = analyse(latest.counts, rsAir, latest.preheated);
+  const { devices, device, latest, buckets, calibration: cal, sessions, history } = data;
+  const baseline = cal?.baseline_counts ?? null;
+  const counts = countsOf(latest);
+  const now = computeStatus({ counts, preheated: latest.preheated }, baseline);
   const v = VERDICT[now.verdict];
-  const times = history.map((r) => Date.parse(r.ts));
-  const past = history.map((r) => analyse(r.counts, rsAir, r.preheated));
-  const segments = toSegments(times, past.map((p) => p.verdict));
+  const times = buckets.map((b) => Date.parse(b.t));
+  const past = buckets.map((b) => computeStatus({ counts: countsOf(b), preheated: b.preheated }, baseline));
+  const step = RANGES[range].bucket * 1000;
+  const segments = toSegments(times, past.map((p) => p.verdict), step);
   const current = segments.findLast((s) => s.verdict !== "gap");
-  const ageMs = msSince(latest.ts);
+  const ageMs = msSince(device.last_seen_at ?? latest.created_at);
   const online = ageMs < GAP_MS;
+  const session = sessions.find((s) => s.id === latest.session_id);
+  const href = (patch: Params) => hrefWith(sp, patch);
 
-  const trend: Series[] = SENSORS.filter((s) => s.verdict).map((s, k) => ({
+  // Before calibration there is no response yet, so the chart shows the raw ADS1115 counts instead.
+  const trend: Series[] = SENSORS.map((s, k) => ({
     key: s.key,
-    label: `${s.key.toUpperCase().replace("MQ", "MQ-")} ${s.formula}`,
+    label: `${sensorName(s.key)} ${s.formula}`,
     color: `var(--s${k + 1})`,
-    values: past.map((p) => p.rows.find((r) => r.key === s.key)?.response ?? null),
+    values: baseline
+      ? past.map((p) => p.rows.find((r) => r.key === s.key)?.response ?? null)
+      : buckets.map((b) => { const c = countsOf(b)[k]; return c > 0 ? c : null; }),
   }));
-  const metric = (k: "temp_c" | "humidity"): Series[] => [{ key: k, label: k === "temp_c" ? "Suhu" : "Kelembapan", color: "var(--moss)", values: history.map((r) => r[k]) }];
+  const metric = (k: "temperature_c" | "humidity_pct"): Series[] => [
+    { key: k, label: k === "temperature_c" ? "Suhu" : "Kelembapan", color: "var(--moss)", values: buckets.map((r) => r[k]) },
+  ];
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
@@ -118,10 +125,24 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
             <span className="inline-flex items-center gap-2 font-medium text-ink-2">
               <span className={`size-2.5 rounded-full ${online ? "bg-ok" : "bg-bad"}`} aria-hidden />
-              {online ? "Online" : "Offline"} · <span className="font-mono">{latest.device}</span>
+              {online ? "Online" : "Offline"} · <span className="font-mono">{device.device_code}</span>
             </span>
-            <span className="text-muted">Data {ago(ageMs)}</span>
+            <span className="text-muted">Data {ago(ageMs)} · {stamp(latest.recorded_at)}</span>
           </div>
+          {devices.length > 1 && (
+            <nav aria-label="Pilih alat" className="mt-3">
+              <ul className="flex flex-wrap gap-1.5 text-xs">
+                {devices.map((d) => (
+                  <li key={d.id}>
+                    <a href={hrefWith({}, { dev: d.device_code })} aria-current={d.id === device.id ? "page" : undefined}
+                      className={`inline-block rounded-lg px-2.5 py-1.5 font-mono ${d.id === device.id ? "bg-moss text-on-moss" : "bg-ink/8 text-ink-2 hover:text-ink"}`}>
+                      {d.name ?? d.device_code}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
 
           <div className="mt-8 flex items-start gap-4 sm:mt-10 sm:gap-5">
             <span className={`grid size-14 shrink-0 place-items-center rounded-2xl text-well sm:size-16 ${TONE[v.tone].bg}`}>
@@ -137,33 +158,47 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
 
           <Ladder level={v.level} />
           <p className="mt-3 text-sm text-ink-2">
-            {now.score === null ? "Respons gas belum bisa dihitung." : <>Respons gas tertinggi <strong className="font-semibold text-ink">{fmt(now.score, 2)}</strong></>}
-            {" "}· batas waspada {fmt(THRESHOLD.waspada, 1)}, tidak layak {fmt(THRESHOLD.tidakLayak, 1)} (sementara)
+            <strong className="font-semibold text-ink">{now.reason}</strong>
+            {" "}Batas waspada {fmt(THRESHOLD.waspada, 1)}, tidak layak {fmt(THRESHOLD.tidakLayak, 1)} (sementara).
           </p>
-          {now.verdict === "pemanasan" && <Meter value={Math.min(1, latest.uptime_min / 10)} label={`Pemanasan ${latest.uptime_min} dari 10 menit`} />}
+          {now.verdict === "pemanasan" && <Meter value={Math.min(1, (latest.uptime_min ?? 0) / 10)} label={`Pemanasan ${latest.uptime_min ?? 0} dari 10 menit`} />}
 
           <dl className="mt-auto grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-5 text-sm sm:grid-cols-3">
-            <Fact term="Sampel" value={latest.label && latest.label !== "unknown" ? latest.label : "Belum diberi label"} />
-            <Fact term="Lama disimpan" value={latest.hours !== null && latest.hours >= 0 ? `${fmt(latest.hours, 1)} jam` : "–"} />
+            <Fact term="Sampel" value={session?.label ?? "Belum diberi label"} />
+            <Fact term="Lama disimpan" value={session?.planned_hours != null ? `${fmt(Number(session.planned_hours), 1)} jam` : "–"} />
             <Fact term="Status ini sejak" value={current ? `${hhmm(current.start)} (${dur(current.end - current.start)})` : "–"} />
           </dl>
         </section>
 
-        <Metric id="suhu" icon="thermo" title="Suhu" unit="°C" value={latest.temp_c} times={times} series={metric("temp_c")}
-          note={latest.temp_c !== null && latest.temp_c > 5 && latest.temp_c < 60 ? "Zona bahaya 5–60 °C: bakteri bisa berkembang." : "Di luar zona bahaya 5–60 °C."} />
-        <Metric id="lembap" icon="drop" title="Kelembapan" unit="%" value={latest.humidity} times={times} series={metric("humidity")}
+        <Metric id="suhu" icon="thermo" title="Suhu" unit="°C" value={latest.temperature_c} times={times} series={metric("temperature_c")}
+          note={latest.temperature_c !== null && latest.temperature_c > 5 && latest.temperature_c < 60 ? "Zona bahaya 5–60 °C: bakteri bisa berkembang." : "Di luar zona bahaya 5–60 °C."} />
+        <Metric id="lembap" icon="drop" title="Kelembapan" unit="%" value={latest.humidity_pct} times={times} series={metric("humidity_pct")}
           note="Kelembapan tinggi mempercepat pertumbuhan mikroba dan memengaruhi sensor MQ." />
       </div>
 
       {/* Tray 2: how it changed */}
       <div className="tray grid gap-2.5 lg:grid-cols-[1.65fr_1fr] [&>*]:min-w-0">
         <section id="tren" aria-labelledby="tren-h" className="well p-5 sm:p-6">
-          <Heading id="tren-h" icon="wind" title="Tren respons gas" sub={`Respons tiap sensor terhadap udara bersih, ${span(times)} terakhir. Garis putus-putus adalah batas status.`} />
-          {rsAir ? (
+          <Heading id="tren-h" icon="wind" title="Tren gas" sub={baseline
+            ? `Respons 8 sensor terhadap udara bersih, ${span(times)} terakhir. Garis putus-putus adalah batas status.`
+            : `Nilai mentah ADS1115 dari 8 sensor, ${span(times)} terakhir. Respons dan batas status muncul setelah kalibrasi.`} />
+          <nav aria-label="Rentang waktu" className="-mt-2 mb-4">
+            <ul className="flex gap-1.5 text-xs font-medium">
+              {(Object.keys(RANGES) as RangeKey[]).map((k) => (
+                <li key={k}>
+                  <a href={`${href({ range: k })}#tren`} aria-current={k === range ? "true" : undefined}
+                    className={`inline-block rounded-lg px-2.5 py-1.5 ${k === range ? "bg-moss text-on-moss" : "bg-ink/8 text-ink-2 hover:text-ink"}`}>
+                    {RANGES[k].label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          {baseline ? (
             <LineChart label="Tren respons gas" times={times} series={trend} height={260} digits={2} floor={0} ceil={THRESHOLD.tidakLayak + 0.5}
               thresholds={[{ v: THRESHOLD.waspada, label: "Waspada", tone: "warn" }, { v: THRESHOLD.tidakLayak, label: "Tidak layak", tone: "bad" }]} />
           ) : (
-            <Notice>Grafik respons muncul setelah alat dikalibrasi di udara bersih.</Notice>
+            <LineChart label="Tren nilai mentah sensor gas" times={times} series={trend} height={260} digits={0} />
           )}
         </section>
 
@@ -183,25 +218,33 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
             })}
           </ol>
         </section>
+
+        <section aria-labelledby="riwayat-data-h" className="well p-5 sm:p-6 lg:col-span-2">
+          <Heading id="riwayat-data-h" icon="clock" title="Riwayat pembacaan" sub="Semua data yang masuk, terbaru di atas. Waktu dalam WIB." />
+          <HistoryTable rows={history.slice(0, PAGE_SIZE)} baseline={baseline} sessions={sessions} sp={sp} page={page}
+            hasNext={history.length > PAGE_SIZE} />
+        </section>
       </div>
 
       {/* Tray 3: the evidence and the device */}
       <div className="tray grid gap-2.5 lg:grid-cols-[1.65fr_1fr] [&>*]:min-w-0">
         <section id="gas" aria-labelledby="gas-h" className="well p-5 sm:p-6">
           <Heading id="gas-h" icon="flask" title="Detail gas terdeteksi" sub="Perkiraan dari kurva datasheet tiap sensor MQ. Sensor MQ peka silang, jadi ini estimasi, bukan hasil lab." />
+          <SensorCards counts={counts} baseline={baseline} temp={latest.temperature_c} hum={latest.humidity_pct} />
           <GasTable rows={now.rows} />
         </section>
 
         <section id="alat" aria-labelledby="alat-h" className="well p-5 sm:p-6">
-          <Heading id="alat-h" icon="chip" title="Kesehatan alat" sub={`Uptime ${dur(latest.uptime_min * 60_000)}`} />
-          <DeviceHealth latest={latest} online={online} ageMs={ageMs} />
+          <Heading id="alat-h" icon="chip" title="Kesehatan alat" sub={`Uptime ${dur((latest.uptime_min ?? 0) * 60_000)}`} />
+          <DeviceHealth latest={latest} counts={counts} online={online} ageMs={ageMs} />
+          <DeviceList devices={devices} current={device.id} />
           <div className="mt-6 border-t border-line pt-5">
             <h3 className="font-semibold">Kalibrasi udara bersih</h3>
             <p className="mt-1 mb-4 text-sm text-ink-2">
-              {cal ? `Terakhir ${new Date(cal.created_at).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: TZ })}.` : "Belum pernah dikalibrasi."}{" "}
-              Lakukan tanpa makanan, setelah 10 menit pemanasan.
+              {cal ? `Terakhir ${stamp(cal.calibrated_at)}.` : "Belum pernah dikalibrasi."}{" "}
+              Lakukan tanpa makanan, setelah 10 menit pemanasan. Baseline diambil dari rata-rata data 1 menit terakhir.
             </p>
-            <CalibrateForm device={latest.device} />
+            <CalibrateForm device={device.device_code} />
           </div>
         </section>
       </div>
@@ -334,15 +377,135 @@ function GasTable({ rows }: { rows: GasRow[] }) {
   );
 }
 
-function DeviceHealth({ latest, online, ageMs }: { latest: Reading; online: boolean; ageMs: number }) {
-  const c = latest.counts;
+function SensorCards({ counts, baseline, temp, hum }: { counts: number[]; baseline: number[] | null; temp: number | null; hum: number | null }) {
+  const card = "rounded-xl bg-ink/5 px-3 py-2.5 shadow-[inset_0_1px_2px_var(--well-shade)]";
+  return (
+    <ul className="mb-6 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
+      {SENSORS.map((s, i) => {
+        const now = counts[i], base = baseline?.[i];
+        const delta = now > 0 && base ? ((now - base) / base) * 100 : null;
+        return (
+          <li key={s.key} className={card}>
+            <p className="font-mono text-xs font-medium text-ink-2">{sensorName(s.key)} <span className="font-sans text-muted">{s.formula}</span></p>
+            <p className="mt-1 text-xl font-semibold tracking-tight">{now > 0 ? fmt(now, 0) : <span className="text-base text-bad">Tidak terbaca</span>}</p>
+            <p className="text-xs text-muted">Baseline {base ? fmt(base, 0) : "–"}</p>
+            <p className="text-xs font-medium text-ink-2">Δ {delta === null ? "–" : `${delta > 0 ? "+" : ""}${fmt(delta, 1)} %`}</p>
+          </li>
+        );
+      })}
+      <li className={card}>
+        <p className="text-xs font-medium text-ink-2">Suhu</p>
+        <p className="mt-1 text-xl font-semibold tracking-tight">{temp === null ? "–" : `${fmt(Number(temp), 1)} °C`}</p>
+      </li>
+      <li className={card}>
+        <p className="text-xs font-medium text-ink-2">Kelembapan</p>
+        <p className="mt-1 text-xl font-semibold tracking-tight">{hum === null ? "–" : `${fmt(Number(hum), 0)} %`}</p>
+      </li>
+    </ul>
+  );
+}
+
+function HistoryTable({ rows, baseline, sessions, sp, page, hasNext }: {
+  rows: Reading[]; baseline: number[] | null; sessions: Session[]; sp: Params; page: number; hasNext: boolean;
+}) {
+  const field = "h-9 rounded-xl border border-line bg-well px-2.5 text-sm text-ink shadow-[inset_0_1px_2px_var(--well-shade)] hover:border-muted focus-visible:border-moss";
+  const pager = "rounded-lg px-3 py-1.5 font-medium bg-ink/8 text-ink-2 hover:text-ink";
+  return (
+    <>
+      <form method="get" action="#riwayat-data-h" className="mb-4 flex flex-wrap items-end gap-2 text-sm">
+        {sp.dev && <input type="hidden" name="dev" value={sp.dev} />}
+        {sp.range && <input type="hidden" name="range" value={sp.range} />}
+        <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
+          Tanggal
+          <input type="date" name="tgl" defaultValue={sp.tgl} className={field} />
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
+          Sesi
+          <select name="sesi" defaultValue={sp.sesi ?? ""} className={field}>
+            <option value="">Semua sesi</option>
+            {sessions.map((s) => (
+              <option key={s.id} value={s.id}>{s.label} · {stamp(s.started_at)}{s.ended_at ? "" : " (aktif)"}</option>
+            ))}
+          </select>
+        </label>
+        <button className="h-9 rounded-xl bg-moss px-4 font-semibold text-on-moss transition-colors hover:bg-moss-deep hover:text-well">Terapkan</button>
+        {(sp.tgl || sp.sesi) && <a href={`${hrefWith(sp, { tgl: undefined, sesi: undefined, hal: undefined })}#riwayat-data-h`} className="px-2 py-2 text-ink-2 underline underline-offset-2 hover:text-ink">Reset</a>}
+      </form>
+      {rows.length === 0 ? (
+        <Notice>Tidak ada data untuk filter ini.</Notice>
+      ) : (
+        <div className="-mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
+          <table className="w-full min-w-[560px] text-left text-sm">
+            <thead className="text-xs text-muted">
+              <tr className="border-b border-line">
+                <th scope="col" className="py-2 pr-3 font-medium">Waktu</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Sesi</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Status</th>
+                <th scope="col" className="py-2 pr-3 text-right font-medium">Suhu</th>
+                <th scope="col" className="py-2 text-right font-medium">Kelembapan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                // shortcut: rows are judged with the current baseline, not the one active at that time; fine until recalibrations are frequent.
+                const m = VERDICT[computeStatus({ counts: countsOf(r), preheated: r.preheated }, baseline).verdict];
+                return (
+                  <tr key={r.id} className="border-b border-line last:border-0">
+                    <td className="whitespace-nowrap py-2 pr-3">{stamp(r.recorded_at, true)}</td>
+                    <td className="py-2 pr-3 text-ink-2">{r.session_label ?? "–"}</td>
+                    <td className={`py-2 pr-3 font-medium ${TONE[m.tone].text}`}>{m.title}</td>
+                    <td className="py-2 pr-3 text-right">{r.temperature_c === null ? "–" : `${fmt(Number(r.temperature_c), 1)} °C`}</td>
+                    <td className="py-2 text-right">{r.humidity_pct === null ? "–" : `${fmt(Number(r.humidity_pct), 0)} %`}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <nav aria-label="Halaman riwayat" className="mt-4 flex items-center gap-2 text-sm">
+        {page > 1 && <a href={`${hrefWith(sp, { hal: String(page - 1) })}#riwayat-data-h`} className={pager}>‹ Sebelumnya</a>}
+        <span className="text-muted">Halaman {page}</span>
+        {hasNext && <a href={`${hrefWith(sp, { hal: String(page + 1) })}#riwayat-data-h`} className={pager}>Berikutnya ›</a>}
+      </nav>
+    </>
+  );
+}
+
+function DeviceList({ devices, current }: { devices: DeviceStatus[]; current: string }) {
+  return (
+    <div className="mt-6 border-t border-line pt-5">
+      <h3 className="font-semibold">Daftar alat</h3>
+      <ul className="mt-2 divide-y divide-line text-sm">
+        {devices.map((d) => {
+          const online = d.last_seen_at !== null && msSince(d.last_seen_at) < GAP_MS;
+          return (
+            <li key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-2.5">
+              <span className={`size-2.5 rounded-full ${online ? "bg-ok" : "bg-bad"}`} aria-hidden />
+              <a href={hrefWith({}, { dev: d.device_code })} aria-current={d.id === current ? "page" : undefined}
+                className={`font-mono font-medium underline-offset-2 hover:underline ${d.id === current ? "text-moss-deep" : ""}`}>
+                {d.name ?? d.device_code}
+              </a>
+              <span className="text-xs text-ink-2">{online ? "Online" : "Offline"}</span>
+              <span className="ml-auto text-right text-xs text-ink-2">
+                {d.session_label ? `Sesi ${d.session_label}` : "Tanpa sesi"} · {d.last_seen_at ? `terlihat ${ago(msSince(d.last_seen_at))}` : "belum pernah"}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function DeviceHealth({ latest, counts: c, online, ageMs }: { latest: Reading; counts: number[]; online: boolean; ageMs: number }) {
   const adsOk = (from: number) => c.slice(from, from + 4).some((x) => x > 0);
   const items: { label: string; ok: boolean; detail: string; icon: IconName }[] = [
     { label: "Koneksi MQTT", ok: online, detail: online ? "Mengirim tiap 5 detik" : `Terakhir ${ago(ageMs)}`, icon: "wifi" },
     { label: "ADS1115 0x48", ok: adsOk(0), detail: "MQ-2, 3, 4, 5", icon: "chip" },
     { label: "ADS1115 0x49", ok: adsOk(4), detail: "MQ-6, 7, 8, 135", icon: "chip" },
-    { label: "DHT11", ok: latest.temp_c !== null && latest.humidity !== null, detail: "Suhu dan kelembapan", icon: "thermo" },
-    { label: "Pemanasan", ok: latest.preheated, detail: latest.preheated ? "Selesai" : `${latest.uptime_min} dari 10 menit`, icon: "hourglass" },
+    { label: "DHT11", ok: latest.temperature_c !== null && latest.humidity_pct !== null, detail: "Suhu dan kelembapan", icon: "thermo" },
+    { label: "Pemanasan", ok: latest.preheated, detail: latest.preheated ? "Selesai" : `${latest.uptime_min ?? 0} dari 10 menit`, icon: "hourglass" },
   ];
   return (
     <>
@@ -365,7 +528,7 @@ function DeviceHealth({ latest, online, ageMs }: { latest: Reading; online: bool
           return (
             <li key={s.key} title={ok ? "Terbaca" : "Tidak terbaca"}
               className={`rounded-lg px-2 py-1.5 text-center font-mono text-xs font-medium ${ok ? "bg-ok-wash text-ok" : "bg-bad-wash text-bad"}`}>
-              {s.key.toUpperCase().replace("MQ", "MQ-")}
+              {sensorName(s.key)}
               <span className="sr-only">{ok ? " terbaca" : " tidak terbaca"}</span>
             </li>
           );
@@ -405,10 +568,11 @@ function Notice({ children }: { children: React.ReactNode }) {
 
 function HowItWorks() {
   const steps = [
-    { t: "Sampel", d: "Nasi atau mi diletakkan di bawah tutup sensor." },
-    { t: "Mengendus", d: "8 sensor gas MQ dan DHT11 membaca udara di atas makanan." },
-    { t: "ESP32", d: "ADS1115 mengubah sinyal sensor, ESP32 mengirim tiap 5 detik." },
-    { t: "EMQX", d: "Broker MQTT meneruskan data ke server dan database Supabase." },
+    { t: "Mengendus", d: "Nasi atau mi di bawah tutup sensor. 8 sensor gas MQ dan DHT11 membaca udaranya." },
+    { t: "ESP32", d: "ADS1115 mengubah sinyal sensor, ESP32 publish MQTT tiap 5 detik ke i2aspo/<alat>/telemetry." },
+    { t: "EMQX", d: "Broker MQTT meneruskan tiap pesan lewat Webhook ke server ENDUS." },
+    { t: "API", d: "/api/ingest memeriksa kunci rahasia dan isi data, lalu menyimpannya." },
+    { t: "Supabase", d: "Database menyimpan alat, sesi sampel, pembacaan, dan kalibrasi." },
     { t: "Dashboard", d: "Respons gas dibandingkan dengan udara bersih, lalu jadi status." },
   ];
   return (
@@ -419,12 +583,12 @@ function HowItWorks() {
         Yang dinilai kondisi makanannya, bukan sekadar berapa jam sudah disimpan.
       </p>
 
-      <ol className="mt-10 grid gap-6 sm:grid-cols-5 sm:gap-3">
+      <ol className="mt-10 grid gap-6 lg:grid-cols-6 lg:gap-3">
         {steps.map((s, i) => (
-          <li key={s.t} className="relative flex gap-4 sm:flex-col sm:gap-3">
-            <div className="flex items-center sm:w-full">
+          <li key={s.t} className="relative flex gap-4 lg:flex-col lg:gap-3">
+            <div className="flex items-center lg:w-full">
               <span className="grid size-9 shrink-0 place-items-center rounded-full bg-moss text-sm font-bold text-on-moss">{i + 1}</span>
-              {i < steps.length - 1 && <span className="ml-3 hidden h-px flex-1 bg-moss/40 sm:block" aria-hidden />}
+              {i < steps.length - 1 && <span className="ml-3 hidden h-px flex-1 bg-moss/40 lg:block" aria-hidden />}
             </div>
             <div>
               <h3 className="font-semibold">{s.t}</h3>
@@ -517,7 +681,8 @@ function Skeleton() {
 
 type Segment = { verdict: Verdict | "gap"; start: number; end: number };
 
-function toSegments(times: number[], verdicts: Verdict[]): Segment[] {
+function toSegments(times: number[], verdicts: Verdict[], step: number): Segment[] {
+  const gap = step + GAP_MS; // a missing bucket plus the offline allowance
   const out: Segment[] = [];
   const push = (verdict: Segment["verdict"], start: number, end: number) => {
     const last = out.at(-1);
@@ -526,9 +691,9 @@ function toSegments(times: number[], verdicts: Verdict[]): Segment[] {
   };
   times.forEach((t, i) => {
     const next = times[i + 1];
-    const end = next !== undefined && next - t <= GAP_MS ? next : t + SAMPLE_MS;
+    const end = next !== undefined && next - t <= gap ? next : t + step;
     push(verdicts[i], t, end);
-    if (next !== undefined && next - t > GAP_MS) push("gap", end, next);
+    if (next !== undefined && next - t > gap) push("gap", end, next);
   });
   return out;
 }
@@ -538,6 +703,17 @@ const msSince = (ts: string) => Date.now() - new Date(ts).getTime();
 const fmt = (n: number, d: number) => (Math.abs(n) < 0.5 * 10 ** -d ? 0 : n).toLocaleString("id-ID", { maximumFractionDigits: d, minimumFractionDigits: d });
 // shortcut: server renders in WIB; kitchens in WITA/WIT see WIB times on server-rendered labels (charts use the browser's zone).
 const TZ = "Asia/Jakarta";
+const stamp = (iso: string, seconds = false) =>
+  new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", ...(seconds && { second: "2-digit" }), timeZone: TZ });
+const sensorName = (key: string) => key.toUpperCase().replace("MQ", "MQ-");
+type Params = Record<string, string | undefined>;
+/** Current query string with some keys replaced or removed (undefined). */
+function hrefWith(sp: Params, patch: Params) {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries({ ...sp, ...patch })) if (v) p.set(k, v);
+  const s = p.toString();
+  return s ? `?${s}` : "?";
+}
 const hhmm = (t: number) => new Date(t).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
 function dur(ms: number) {
   const m = Math.round(ms / 60_000);

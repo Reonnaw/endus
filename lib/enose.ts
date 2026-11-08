@@ -32,7 +32,7 @@ export const SENSORS: Sensor[] = [
 ];
 const MQ135_CO2 = { gas: "Karbon dioksida (respirasi mikroba)", formula: "CO₂", a: 110.47, b: -2.862, offset: 400 };
 
-// shortcut: provisional thresholds on the response S = Rs_air/Rs − 1 (paper Eq. 1); replace with the
+// PLACEHOLDER, not a scientific cut-off. shortcut: provisional thresholds on the response S = Rs_air/Rs − 1 (paper Eq. 1); replace with the
 // cut-offs of the trained model once lab-labelled data (B. cereus counts) is available.
 export const THRESHOLD = { waspada: 0.5, tidakLayak: 1.5 };
 
@@ -70,15 +70,4 @@ export function analyse(counts: number[], rsAir: number[] | null, preheated: boo
   else if (!preheated) verdict = "pemanasan";
   else verdict = score >= THRESHOLD.tidakLayak ? "tidak_layak" : score >= THRESHOLD.waspada ? "waspada" : "layak";
   return { rows, score: Number.isFinite(score) ? score : null, verdict };
-}
-
-/** Clean-air baseline: median Rs/RL per channel over several readings. */
-export function baseline(countsList: number[][]): number[] | null {
-  const out: number[] = [];
-  for (let i = 0; i < SENSORS.length; i++) {
-    const v = countsList.map((c) => rsOverRl(c[i] ?? -1)).filter((x): x is number => x !== null).sort((a, b) => a - b);
-    if (v.length === 0) return null;
-    out.push(v[Math.floor(v.length / 2)]);
-  }
-  return out;
 }

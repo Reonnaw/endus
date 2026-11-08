@@ -1,23 +1,50 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { baseline } from "@/lib/enose";
-import { insert, select, type Reading } from "@/lib/supabase";
+import { DEVICE_CODE } from "@/lib/ingest";
+import { verifyToken } from "@/lib/secret";
+import { insert, select, type Counts } from "@/lib/supabase";
+import { countsOf } from "@/lib/queries";
 
-// Store the clean-air baseline: put the device in clean air (no food) after the 10-min preheat, then run.
+const WINDOW_MS = 60_000;
+const MIN_READINGS = 6;
+
+// Clean-air baseline: device in clean air (no food), after the 10-min preheat. Averages the last minute.
 export async function calibrate(_prev: string, form: FormData): Promise<string> {
-  const token = process.env.CALIBRATE_TOKEN;
-  if (!token || form.get("token") !== token) return "Token kalibrasi salah.";
   const device = String(form.get("device") ?? "");
+  const token = String(form.get("token") ?? "");
+  if (!DEVICE_CODE.test(device) || !token) return "Isi kode alat dan token kalibrasi.";
 
-  const rows = await select<Pick<Reading, "counts">>(
-    `readings?select=counts&device=eq.${encodeURIComponent(device)}&preheated=is.true&order=ts.desc&limit=12`,
+  const [dev] = await select<{ id: string; device_secrets: { calibration_token_hash: string } | null }>(
+    `devices?select=id,device_secrets(calibration_token_hash)&device_code=eq.${encodeURIComponent(device)}`,
+    true,
   );
-  if (rows.length < 6) return "Butuh minimal 6 data setelah pemanasan sensor (±30 detik).";
-  const rsAir = baseline(rows.map((r) => r.counts));
-  if (!rsAir) return "Ada sensor yang tidak terbaca. Cek kabel ADS1115.";
+  // Same message for unknown device, missing secret and wrong token, so the form does not reveal which.
+  if (!dev?.device_secrets || !verifyToken(token, dev.device_secrets.calibration_token_hash)) return "Kode alat atau token salah.";
 
-  await insert("calibrations", { device, rs_air: rsAir });
+  const since = new Date(Date.now() - WINDOW_MS).toISOString();
+  const rows = await select<Counts & { temperature_c: number | null; humidity_pct: number | null }>(
+    `readings?select=mq2,mq3,mq4,mq5,mq6,mq7,mq8,mq135,temperature_c,humidity_pct&device_id=eq.${dev.id}&preheated=is.true&recorded_at=gte.${encodeURIComponent(since)}`,
+    true,
+  );
+  if (rows.length < MIN_READINGS) {
+    return `Butuh minimal ${MIN_READINGS} data setelah pemanasan dalam 1 menit terakhir (ada ${rows.length}). Pastikan alat online dan sudah 10 menit menyala.`;
+  }
+  const counts = rows.map(countsOf);
+  if (counts.some((c) => c.some((x) => x <= 0))) return "Ada sensor yang tidak terbaca. Cek kabel ADS1115 dan modul MQ.";
+
+  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const avgOf = (k: "temperature_c" | "humidity_pct") => {
+    const v = rows.map((r) => r[k]).filter((x): x is number => x !== null);
+    return v.length ? Math.round(mean(v.map(Number)) * 100) / 100 : null;
+  };
+  await insert("calibrations", {
+    device_id: dev.id,
+    baseline_counts: counts[0].map((_, i) => Math.round(mean(counts.map((c) => c[i])))),
+    temperature_c: avgOf("temperature_c"),
+    humidity_pct: avgOf("humidity_pct"),
+    note: `rata-rata ${rows.length} data`,
+  });
   refresh();
   return "Kalibrasi tersimpan.";
 }
