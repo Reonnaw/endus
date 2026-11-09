@@ -106,7 +106,7 @@ MQ sensors only give a resistance, so the status needs a clean-air baseline per 
 
 - Response per sensor `S = Rs_air / Rs − 1` (Eq. 1 in the paper), with `Rs_air` from the baseline counts.
 - Status uses MQ-2, MQ-3, MQ-7, MQ-8 and MQ-135. MQ-4/5/6 (fuel gases) are shown as info only.
-- Highest S: `< 0.5` **Layak dikonsumsi**, `0.5–1.5` **Waspada**, `≥ 1.5` **Tidak layak** (`THRESHOLD`).
+- Highest S: `< 0.1` **Layak dikonsumsi**, `0.1–0.15` **Waspada**, `≥ 0.15` **Tidak layak** (`THRESHOLD`, fitted on one rice and one noodle sample).
   **These are PLACEHOLDER values, not scientific cut-offs.** Replace them with cut-offs from the lab-labelled data.
 - Without a baseline the status is "Kalibrasi belum dilakukan". The status line names the sensor that deviates most.
 - ppm values come from the datasheet curves (`ppm = a·(Rs/R0)^b`). They are estimates, because MQ sensors are cross-sensitive.

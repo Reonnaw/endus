@@ -34,7 +34,10 @@ const MQ135_CO2 = { gas: "Karbon dioksida (respirasi mikroba)", formula: "CO₂"
 
 // PLACEHOLDER, not a scientific cut-off. shortcut: provisional thresholds on the response S = Rs_air/Rs − 1 (paper Eq. 1); replace with the
 // cut-offs of the trained model once lab-labelled data (B. cereus counts) is available.
-export const THRESHOLD = { waspada: 0.5, tidakLayak: 1.5 };
+// Set from ENDUS01 field data, 9 Nov 2026 (clean-air calibration, fan on): clean air stays below ~0.07, cooked rice
+// at 5 h shows no response, noodles at ~20 h push MQ-3 to 0.20 and rising after 4 min. One sample each, so re-fit
+// once there are longer runs (15 min, closed container) of fresh and spoiled food.
+export const THRESHOLD = { waspada: 0.1, tidakLayak: 0.15 };
 
 /** Sensor resistance relative to the load resistor (Rs/RL). RL cancels out in every ratio we use. */
 export function rsOverRl(count: number): number | null {
