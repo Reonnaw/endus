@@ -615,59 +615,6 @@ function HowItWorks() {
         ))}
       </ol>
 
-      <div className="mt-12">
-      <More title="Kenapa bukan aturan 2 jam? Dasar status dan rujukan">
-      <div className="mt-4 grid gap-10 lg:grid-cols-2 lg:gap-16">
-        <div>
-          <h3 className="text-xl font-semibold">Kenapa bukan aturan 2 jam?</h3>
-          <div className="mt-3 space-y-3 text-ink-2">
-            <p>
-              Spora <em>Bacillus cereus</em> tahan dimasak. Kalau nasi atau mi dibiarkan hangat terlalu lama, bakteri berkembang dan
-              sebagian galur membentuk toksin cereulide yang tahan panas, jadi dipanaskan ulang pun tidak membuatnya aman.
-            </p>
-            <p>
-              Makanan bisa terlihat dan tercium normal padahal sudah berisiko. Aturan waktu tetap tidak melihat kondisi makanan:
-              sering diabaikan di dapur yang sibuk, dan kalau dipatuhi, banyak makanan yang masih aman ikut terbuang.
-            </p>
-          </div>
-        </div>
-        <div>
-          <h3 className="text-xl font-semibold">Dasar status</h3>
-          <p className="mt-3 text-ink-2">Label pelatihan ENDUS mengikuti kriteria mikrobiologi makanan siap saji (HPA, 2009):</p>
-          <table className="mt-4 w-full text-left text-sm">
-            <thead className="text-xs text-muted">
-              <tr className="border-b border-line"><th scope="col" className="py-2 font-medium"><em>B. cereus</em> (CFU/g)</th><th scope="col" className="py-2 font-medium">Status ENDUS</th></tr>
-            </thead>
-            <tbody>
-              {([["< 10³", "layak"], ["10³ – 10⁵", "waspada"], ["> 10⁵", "tidak_layak"]] as const).map(([r, k]) => (
-                <tr key={k} className="border-b border-line">
-                  <td className="py-2.5 font-medium">{r}</td>
-                  <td className="py-2.5">
-                    <span className={`inline-flex items-center gap-1.5 font-semibold ${TONE[VERDICT[k].tone].text}`}>
-                      <Icon name={VERDICT[k].icon} width={16} height={16} strokeWidth={2.25} />{VERDICT[k].title}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="mt-3 text-sm text-ink-2">
-            Batas respons gas di dashboard masih sementara. Batas akhirnya diambil dari model yang dilatih dengan hasil hitung koloni di laboratorium.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-14 border-t border-line pt-6">
-        <h3 className="text-sm font-semibold text-ink-2">Rujukan</h3>
-        <ul className="mt-3 grid gap-2 text-sm text-ink-2 md:grid-cols-2">
-          <li>Tangtisanon &amp; Grodniyomchai (2025). A portable electronic nose for real-time monitoring of food spoilage. <a className="text-moss-deep underline underline-offset-2 hover:text-ink" href="https://sensors.myu-group.co.jp/sm_pdf/SM4250.pdf">Sensors and Materials 37</a>.</li>
-          <li>Lab-made electronic nose for fast detection of <em>Listeria monocytogenes</em> and <em>Bacillus cereus</em> (2020). <a className="text-moss-deep underline underline-offset-2 hover:text-ink" href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7158669">Veterinary Sciences</a>.</li>
-          <li><a className="text-moss-deep underline underline-offset-2 hover:text-ink" href="https://www.mdpi.com/2304-8158/11/9/1181">Foods 11(9):1181</a> (MDPI, 2022).</li>
-          <li>Health Protection Agency (2009). Guidelines for assessing the microbiological safety of ready-to-eat foods.</li>
-        </ul>
-      </div>
-      </More>
-      </div>
     </section>
   );
 }
