@@ -139,6 +139,10 @@ begin
       values (v_device, p_label, nullif(p_note, ''), p_planned_hours, p_recorded_at)
       returning id into v_session;
     end if;
+  else
+    -- "unknown" = nothing under the sensor: close the open session now, not when the next sample starts.
+    update public.sessions set ended_at = p_recorded_at
+    where device_id = v_device and ended_at is null and started_at <= p_recorded_at;
   end if;
 
   insert into public.readings (device_id, session_id, recorded_at, uptime_ms, uptime_min, preheated,

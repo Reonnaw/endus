@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { calibrate } from "./actions";
+import { calibrate, setSample } from "./actions";
 
 export function AutoRefresh({ ms }: { ms: number }) {
   const router = useRouter();
@@ -180,6 +180,32 @@ export function CalibrateForm({ device }: { device: string }) {
         </button>
       </div>
       {msg && <p role="status" className={`text-sm font-medium ${ok ? "text-ok" : "text-bad"}`}>{msg}</p>}
+    </form>
+  );
+}
+
+const SAMPLE_OPTIONS = [["nasi", "Nasi"], ["mi", "Mi"], ["unknown", "Tidak ada"]] as const;
+
+/** What is under the sensor right now. `current` is the label the device last reported. */
+export function SampleButtons({ device, current }: { device: string; current: string }) {
+  const [msg, action, pending] = useActionState(setSample, "");
+  return (
+    <form action={action} className="mt-5 flex flex-col gap-2">
+      <input type="hidden" name="device" value={device} />
+      <p id="sample-h" className="text-sm font-medium text-ink-2">Yang sedang diukur</p>
+      <div role="group" aria-labelledby="sample-h" className="flex flex-wrap gap-2">
+        {SAMPLE_OPTIONS.map(([value, label]) => {
+          const on = current === value;
+          return (
+            <button key={value} name="label" value={value} disabled={pending} aria-pressed={on}
+              className={`h-10 rounded-xl px-4 text-sm font-semibold transition-colors active:translate-y-px disabled:cursor-wait disabled:opacity-60 ${
+                on ? "bg-moss text-on-moss" : "border border-line text-ink-2 hover:border-muted hover:text-ink"}`}>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      {msg && <p role="status" className={`text-sm font-medium ${msg.startsWith("Terkirim") ? "text-ok" : "text-bad"}`}>{msg}</p>}
     </form>
   );
 }

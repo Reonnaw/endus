@@ -25,6 +25,8 @@ The dashboard is server-rendered on every request and refreshes every 5 s.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | API Keys → publishable / legacy anon | yes, it can only read (RLS) |
 | `SUPABASE_SERVICE_ROLE_KEY` | API Keys → secret / legacy service_role | **no**, server only |
 | `INGEST_SECRET` | `openssl rand -hex 32` | **no**, server only |
+| `EMQX_API_URL` | EMQX dashboard address, e.g. `http://<host>:18083` | **no**, server only |
+| `EMQX_API_KEY`, `EMQX_API_SECRET` | EMQX Dashboard → System → API Key → Create | **no**, server only |
 
 The service role key is only read in `lib/supabase.ts`, which imports `server-only`, so a client component that imports it fails the build.
 Redeploy after changing env vars.

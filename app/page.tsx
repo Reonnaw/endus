@@ -3,7 +3,7 @@ import { SENSORS, THRESHOLD, type GasRow, type Verdict } from "@/lib/enose";
 import { countsOf, getDashboardData, PAGE_SIZE, RANGES, type RangeKey } from "@/lib/queries";
 import { computeStatus } from "@/lib/status";
 import type { DeviceStatus, Reading, Session } from "@/lib/supabase";
-import { AutoRefresh, CalibrateForm, LineChart, SensorArray3D, type Series } from "./client";
+import { AutoRefresh, CalibrateForm, LineChart, SampleButtons, SensorArray3D, type Series } from "./client";
 import { Icon, Logo, type IconName } from "./icons";
 
 type Tone = "ok" | "warn" | "bad" | "idle";
@@ -167,6 +167,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
             <Fact term="Lama disimpan" value={session?.planned_hours != null ? `${fmt(Number(session.planned_hours), 1)} jam` : "–"} />
             <Fact term="Status ini sejak" value={current ? `${hhmm(current.start)} (${dur(current.end - current.start)})` : "–"} />
           </dl>
+          <SampleButtons device={device.device_code} current={session?.label ?? "unknown"} />
         </section>
 
         <Metric id="suhu" icon="thermo" title="Suhu" unit="°C" value={latest.temperature_c} times={times} series={metric("temperature_c")}

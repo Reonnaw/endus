@@ -48,3 +48,33 @@ export async function calibrate(_prev: string, form: FormData): Promise<string> 
   refresh();
   return "Kalibrasi tersimpan.";
 }
+
+const SAMPLES = ["nasi", "mi", "unknown"] as const;
+
+// What is under the sensor. Published to the device (retained, so it survives a reboot); the device then puts
+// the label in every telemetry message and ingest_telemetry opens or closes the session.
+export async function setSample(_prev: string, form: FormData): Promise<string> {
+  const device = String(form.get("device") ?? "");
+  const label = String(form.get("label") ?? "");
+  if (!DEVICE_CODE.test(device) || !(SAMPLES as readonly string[]).includes(label)) return "Pilihan tidak valid.";
+  const { EMQX_API_URL: url, EMQX_API_KEY: key, EMQX_API_SECRET: secret } = process.env;
+  if (!url || !key || !secret) return "EMQX_API_URL / EMQX_API_KEY / EMQX_API_SECRET belum di-set.";
+
+  try {
+    const res = await fetch(`${url}/api/v5/publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Basic ${Buffer.from(`${key}:${secret}`).toString("base64")}` },
+      // "label|hours": -1 hours = not planned. The firmware's strtok skips empty fields, so the hours must be explicit.
+      body: JSON.stringify({ topic: `i2aspo/${device}/session`, payload: `${label}|-1`, qos: 1, retain: true }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      console.error("emqx publish failed:", res.status, await res.text());
+      return `Gagal mengirim ke EMQX (${res.status}).`;
+    }
+  } catch (e) {
+    console.error("emqx publish failed:", e instanceof Error ? e.message : e);
+    return "EMQX tidak bisa dihubungi.";
+  }
+  return "Terkirim. Dashboard berubah dalam ±5 detik.";
+}
