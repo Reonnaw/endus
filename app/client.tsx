@@ -169,7 +169,7 @@ export function CalibrateForm({ device }: { device: string }) {
           // Not type="password": browsers then autofill the saved EMQX dashboard login (same host) and offer to overwrite it with this token.
           id="cal-token" name="token" type="text" required autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
           data-1p-ignore data-lpignore="true" data-bwignore
-          className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-well px-3 text-ink shadow-[inset_0_1px_2px_var(--well-shade)] transition-colors [-webkit-text-security:disc] hover:border-muted focus-visible:border-moss"
+          className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-well px-3 text-ink transition-colors [-webkit-text-security:disc] hover:border-muted focus-visible:border-moss"
         />
         <button
           disabled={pending}
@@ -381,7 +381,7 @@ export function SensorArray3D({ sensors, calibrated, warn, bad }: { sensors: Sen
   const t = tip && sensors[tip.i];
   return (
     <figure className="mb-6">
-      <div ref={box} className="relative h-[260px] cursor-grab overflow-hidden rounded-xl bg-ink/5 shadow-[inset_0_1px_2px_var(--well-shade)] active:cursor-grabbing sm:h-[300px]">
+      <div ref={box} className="relative h-[260px] cursor-grab overflow-hidden rounded-xl bg-ink/5 active:cursor-grabbing sm:h-[300px]">
         {tip && t && (
           <div
             className="pointer-events-none absolute z-10 min-w-36 rounded-xl border border-line bg-well px-3 py-2 text-sm shadow-[0_6px_20px_-8px_rgb(0_0_0/0.35)]"
@@ -396,8 +396,8 @@ export function SensorArray3D({ sensors, calibrated, warn, bad }: { sensors: Sen
         )}
       </div>
       <figcaption className="mt-2 text-xs text-muted">
-        Seret untuk memutar, arahkan ke sensor untuk melihat nilainya.{" "}
-        {calibrated ? "Tinggi = respons S. Bidang kuning dan merah = batas Waspada dan Tidak layak." : "Belum dikalibrasi, jadi tinggi = nilai mentah ADS1115."}
+        Seret untuk memutar.{" "}
+        {calibrated ? "Bidang kuning dan merah = batas Waspada dan Tidak layak." : "Belum dikalibrasi: tinggi = nilai mentah."}
       </figcaption>
     </figure>
   );

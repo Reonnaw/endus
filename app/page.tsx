@@ -8,12 +8,12 @@ import { Icon, Logo, type IconName } from "./icons";
 
 type Tone = "ok" | "warn" | "bad" | "idle";
 const VERDICT: Record<Verdict, { title: string; text: string; icon: IconName; tone: Tone; level: number }> = {
-  layak: { title: "Layak dikonsumsi", text: "Pola gas masih mendekati udara bersih. Belum ada tanda aktivitas mikroba.", icon: "check", tone: "ok", level: 1 },
-  waspada: { title: "Waspada", text: "Gas penanda pembusukan mulai naik. Sajikan segera, jangan disimpan lebih lama.", icon: "alert", tone: "warn", level: 2 },
-  tidak_layak: { title: "Tidak layak", text: "Pola gas menunjukkan risiko pembusukan. Jangan disajikan.", icon: "stop", tone: "bad", level: 3 },
-  pemanasan: { title: "Sensor pemanasan", text: "Sensor MQ butuh 10 menit pemanasan sebelum hasilnya bisa dipakai.", icon: "hourglass", tone: "idle", level: 0 },
-  belum_kalibrasi: { title: "Kalibrasi belum dilakukan", text: "Taruh alat di udara bersih tanpa makanan, tunggu pemanasan selesai, lalu kalibrasi di bagian Alat.", icon: "help", tone: "idle", level: 0 },
-  sensor_error: { title: "Sensor tidak terbaca", text: "Satu atau lebih sensor gas tidak mengirim data. Cek kabel ADS1115 dan modul MQ.", icon: "alert", tone: "bad", level: 0 },
+  layak: { title: "Layak dikonsumsi", text: "Aman disajikan. Belum ada tanda pembusukan.", icon: "check", tone: "ok", level: 1 },
+  waspada: { title: "Waspada", text: "Sajikan segera, jangan disimpan lagi.", icon: "alert", tone: "warn", level: 2 },
+  tidak_layak: { title: "Tidak layak", text: "Risiko basi. Jangan disajikan.", icon: "stop", tone: "bad", level: 3 },
+  pemanasan: { title: "Sensor pemanasan", text: "Tunggu 10 menit sampai sensor siap.", icon: "hourglass", tone: "idle", level: 0 },
+  belum_kalibrasi: { title: "Kalibrasi belum dilakukan", text: "Kalibrasi dulu di udara bersih, tanpa makanan. Tombolnya ada di bagian Alat.", icon: "help", tone: "idle", level: 0 },
+  sensor_error: { title: "Sensor tidak terbaca", text: "Ada sensor gas yang tidak mengirim data. Cek kabel ADS1115 dan modul MQ.", icon: "alert", tone: "bad", level: 0 },
 };
 const TONE = {
   ok: { text: "text-ok", bg: "bg-ok", wash: "bg-ok-wash" },
@@ -35,28 +35,28 @@ const GAP_MS = 30_000; // no reading for 30 s = device offline
 export default function Page({ searchParams }: PageProps<"/">) {
   return (
     <>
-      <header className="sticky top-0 z-20 bg-moss text-on-moss shadow-[0_6px_18px_-12px_rgb(0_0_0/0.6)]">
+      <header className="sticky top-0 z-20 border-b border-line bg-well/90 text-ink backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6">
           <a href="#status" className="flex items-center gap-2.5 rounded-lg">
-            <Logo />
-            <span className="text-xl font-bold tracking-tight">ENDUS</span>
-            <span className="hidden text-sm text-on-moss-2 lg:inline">Electronic nose untuk nasi &amp; mi</span>
+            <Logo className="text-moss" />
+            <span className="text-xl font-bold tracking-tight text-moss-deep">ENDUS</span>
+            <span className="hidden text-sm text-muted lg:inline">Electronic nose untuk nasi &amp; mi</span>
           </a>
           <nav aria-label="Bagian dashboard" className="ml-auto hidden md:block">
             <ul className="flex gap-1 text-sm font-medium">
               {NAV.map(([id, label]) => (
                 <li key={id}>
-                  <a href={`#${id}`} className="rounded-lg px-3 py-2 text-on-moss-2 transition-colors hover:bg-white/10 hover:text-on-moss">{label}</a>
+                  <a href={`#${id}`} className="rounded-lg px-3 py-2 text-ink-2 transition-colors hover:bg-moss-soft hover:text-moss-deep">{label}</a>
                 </li>
               ))}
             </ul>
           </nav>
         </div>
-        <nav aria-label="Bagian dashboard" className="overflow-x-auto border-t border-white/10 md:hidden">
+        <nav aria-label="Bagian dashboard" className="overflow-x-auto border-t border-line md:hidden">
           <ul className="flex w-max gap-1 px-3 py-1.5 text-sm font-medium">
             {NAV.map(([id, label]) => (
               <li key={id}>
-                <a href={`#${id}`} className="block rounded-lg px-3 py-1.5 whitespace-nowrap text-on-moss-2 hover:bg-white/10 hover:text-on-moss">{label}</a>
+                <a href={`#${id}`} className="block rounded-lg px-3 py-1.5 whitespace-nowrap text-ink-2 hover:bg-moss-soft hover:text-moss-deep">{label}</a>
               </li>
             ))}
           </ul>
@@ -120,7 +120,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
       {/* Tray 1: the answer */}
-      <div className="tray grid gap-2.5 lg:grid-cols-[1.65fr_1fr] [&>*]:min-w-0">
+      <div className="tray grid gap-4 lg:grid-cols-[1.65fr_1fr] [&>*]:min-w-0">
         <section id="status" aria-labelledby="status-h" className={`well flex min-h-[min(calc(100svh-9rem),40rem)] flex-col p-6 sm:p-8 lg:row-span-2 lg:min-h-0 ${TONE[v.tone].wash}`}>
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
             <span className="inline-flex items-center gap-2 font-medium text-ink-2">
@@ -158,12 +158,11 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
 
           <Ladder level={v.level} />
           <p className="mt-3 text-sm text-ink-2">
-            <strong className="font-semibold text-ink">{now.reason}</strong>
-            {" "}Batas waspada {fmt(THRESHOLD.waspada, 1)}, tidak layak {fmt(THRESHOLD.tidakLayak, 1)} (sementara).
+            {now.reason} <span className="text-muted">· batas masih sementara</span>
           </p>
           {now.verdict === "pemanasan" && <Meter value={Math.min(1, (latest.uptime_min ?? 0) / 10)} label={`Pemanasan ${latest.uptime_min ?? 0} dari 10 menit`} />}
 
-          <dl className="mt-auto grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-5 text-sm sm:grid-cols-3">
+          <dl className="mt-auto grid grid-cols-2 gap-x-6 gap-y-4 border-t border-ink/10 pt-5 text-sm sm:grid-cols-3">
             <Fact term="Sampel" value={session?.label ?? "Belum diberi label"} />
             <Fact term="Lama disimpan" value={session?.planned_hours != null ? `${fmt(Number(session.planned_hours), 1)} jam` : "–"} />
             <Fact term="Status ini sejak" value={current ? `${hhmm(current.start)} (${dur(current.end - current.start)})` : "–"} />
@@ -171,17 +170,16 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
         </section>
 
         <Metric id="suhu" icon="thermo" title="Suhu" unit="°C" value={latest.temperature_c} times={times} series={metric("temperature_c")}
-          note={latest.temperature_c !== null && latest.temperature_c > 5 && latest.temperature_c < 60 ? "Zona bahaya 5–60 °C: bakteri bisa berkembang." : "Di luar zona bahaya 5–60 °C."} />
-        <Metric id="lembap" icon="drop" title="Kelembapan" unit="%" value={latest.humidity_pct} times={times} series={metric("humidity_pct")}
-          note="Kelembapan tinggi mempercepat pertumbuhan mikroba dan memengaruhi sensor MQ." />
+          note={latest.temperature_c !== null && latest.temperature_c > 5 && latest.temperature_c < 60 ? "Di zona bahaya 5–60 °C" : "Di luar zona bahaya 5–60 °C"} />
+        <Metric id="lembap" icon="drop" title="Kelembapan" unit="%" value={latest.humidity_pct} times={times} series={metric("humidity_pct")} />
       </div>
 
       {/* Tray 2: how it changed */}
-      <div className="tray grid gap-2.5 lg:grid-cols-[1.65fr_1fr] [&>*]:min-w-0">
+      <div className="tray grid gap-4 lg:grid-cols-[1.65fr_1fr] [&>*]:min-w-0">
         <section id="tren" aria-labelledby="tren-h" className="well p-5 sm:p-6">
           <Heading id="tren-h" icon="wind" title="Tren gas" sub={baseline
-            ? `Respons 8 sensor terhadap udara bersih, ${span(times)} terakhir. Garis putus-putus adalah batas status.`
-            : `Nilai mentah ADS1115 dari 8 sensor, ${span(times)} terakhir. Respons dan batas status muncul setelah kalibrasi.`} />
+            ? "Garis putus-putus = batas status."
+            : "Nilai mentah, sebelum kalibrasi."} />
           <nav aria-label="Rentang waktu" className="-mt-2 mb-4">
             <ul className="flex gap-1.5 text-xs font-medium">
               {(Object.keys(RANGES) as RangeKey[]).map((k) => (
@@ -203,7 +201,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
         </section>
 
         <section id="riwayat" aria-labelledby="riwayat-h" className="well p-5 sm:p-6">
-          <Heading id="riwayat-h" icon="clock" title="Riwayat status" sub="Lebar tiap blok sama dengan lamanya status itu bertahan." />
+          <Heading id="riwayat-h" icon="clock" title="Riwayat status" />
           <Timeline segments={segments} />
           <ol className="mt-5 divide-y divide-line text-sm">
             {segments.filter((s) => s.verdict !== "gap").reverse().slice(0, 6).map((s) => {
@@ -220,16 +218,17 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
         </section>
 
         <section aria-labelledby="riwayat-data-h" className="well p-5 sm:p-6 lg:col-span-2">
-          <Heading id="riwayat-data-h" icon="clock" title="Riwayat pembacaan" sub="Semua data yang masuk, terbaru di atas. Waktu dalam WIB." />
-          <HistoryTable rows={history.slice(0, PAGE_SIZE)} baseline={baseline} sessions={sessions} sp={sp} page={page}
-            hasNext={history.length > PAGE_SIZE} />
+          <More open={!!(sp.tgl || sp.sesi || sp.hal)} title={<h2 id="riwayat-data-h" className="text-base font-semibold text-ink">Semua pembacaan <span className="font-normal text-muted">(WIB, terbaru di atas)</span></h2>}>
+            <HistoryTable rows={history.slice(0, PAGE_SIZE)} baseline={baseline} sessions={sessions} sp={sp} page={page}
+              hasNext={history.length > PAGE_SIZE} />
+          </More>
         </section>
       </div>
 
       {/* Tray 3: the evidence and the device */}
-      <div className="tray grid gap-2.5 lg:grid-cols-[1.65fr_1fr] [&>*]:min-w-0">
+      <div className="tray grid gap-4 lg:grid-cols-[1.65fr_1fr] [&>*]:min-w-0">
         <section id="gas" aria-labelledby="gas-h" className="well p-5 sm:p-6">
-          <Heading id="gas-h" icon="flask" title="Detail gas terdeteksi" sub="Perkiraan dari kurva datasheet tiap sensor MQ. Sensor MQ peka silang, jadi ini estimasi, bukan hasil lab." />
+          <Heading id="gas-h" icon="flask" title="Detail gas" sub="Estimasi dari datasheet sensor MQ, bukan hasil lab." />
           <SensorArray3D
             calibrated={!!baseline} warn={THRESHOLD.waspada} bad={THRESHOLD.tidakLayak}
             sensors={SENSORS.map((s, i) => ({
@@ -237,21 +236,23 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
               value: baseline ? now.rows.find((r) => r.key === s.key)?.response ?? null : counts[i] > 0 ? counts[i] : null,
             }))}
           />
-          <SensorCards counts={counts} baseline={baseline} temp={latest.temperature_c} hum={latest.humidity_pct} />
           <GasTable rows={now.rows} />
+          <div className="mt-5">
+            <More title="Nilai mentah per sensor">
+              <SensorCards counts={counts} baseline={baseline} />
+            </More>
+          </div>
         </section>
 
         <section id="alat" aria-labelledby="alat-h" className="well p-5 sm:p-6">
           <Heading id="alat-h" icon="chip" title="Kesehatan alat" sub={`Uptime ${dur((latest.uptime_min ?? 0) * 60_000)}`} />
           <DeviceHealth latest={latest} counts={counts} online={online} ageMs={ageMs} />
-          <DeviceList devices={devices} current={device.id} />
-          <div className="mt-6 border-t border-line pt-5">
-            <h3 className="font-semibold">Kalibrasi udara bersih</h3>
-            <p className="mt-1 mb-4 text-sm text-ink-2">
-              {cal ? `Terakhir ${stamp(cal.calibrated_at)}.` : "Belum pernah dikalibrasi."}{" "}
-              Lakukan tanpa makanan, setelah 10 menit pemanasan. Baseline diambil dari rata-rata data 1 menit terakhir.
-            </p>
-            <CalibrateForm device={device.device_code} />
+          {devices.length > 1 && <DeviceList devices={devices} current={device.id} />}
+          <div className="mt-6 border-t border-line pt-4">
+            <More open={!cal} title={<>Kalibrasi udara bersih <span className="font-normal text-muted">· {cal ? `terakhir ${stamp(cal.calibrated_at)}` : "belum pernah"}</span></>}>
+              <p className="mb-3 text-sm text-ink-2">Tanpa makanan, setelah 10 menit pemanasan.</p>
+              <CalibrateForm device={device.device_code} />
+            </More>
           </div>
         </section>
       </div>
@@ -261,15 +262,28 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
 
 /* ---------- pieces ---------- */
 
-function Heading({ id, icon, title, sub }: { id: string; icon: IconName; title: string; sub: string }) {
+function Heading({ id, icon, title, sub }: { id: string; icon: IconName; title: string; sub?: string }) {
   return (
     <div className="mb-5">
       <h2 id={id} className="flex items-center gap-2 text-lg font-semibold">
         <Icon name={icon} className="text-moss-deep" />
         {title}
       </h2>
-      <p className="mt-1 max-w-[70ch] text-sm text-ink-2">{sub}</p>
+      {sub && <p className="mt-1 max-w-[70ch] text-sm text-muted">{sub}</p>}
     </div>
+  );
+}
+
+/** Collapsed-by-default extra detail, so each panel leads with one answer. */
+function More({ title, open, children }: { title: React.ReactNode; open?: boolean; children: React.ReactNode }) {
+  return (
+    <details open={open} className="group">
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-lg py-1 text-sm font-medium text-moss-deep hover:text-ink [&::-webkit-details-marker]:hidden">
+        <Icon name="chevron" width={16} height={16} strokeWidth={2.25} className="shrink-0 transition-transform group-open:rotate-90" />
+        {title}
+      </summary>
+      <div className="mt-3">{children}</div>
+    </details>
   );
 }
 
@@ -283,7 +297,7 @@ function Ladder({ level }: { level: number }) {
         return (
           <div key={l.v} className="flex flex-col gap-1.5">
             <div
-              className={`rounded-lg transition-colors duration-500 ${on ? TONE[m.tone].bg : "bg-ink/8 shadow-[inset_0_1px_2px_var(--well-shade)]"}`}
+              className={`rounded-lg transition-colors duration-500 ${on ? TONE[m.tone].bg : "bg-ink/8"}`}
               style={{ height: 14 + i * 14 }}
             />
             <span className={`text-xs ${on ? `font-semibold ${TONE[m.tone].text}` : "text-muted"}`}>{l.label}</span>
@@ -315,7 +329,7 @@ function Fact({ term, value }: { term: string; value: string }) {
 }
 
 function Metric({ id, icon, title, unit, value, times, series, note }: {
-  id: string; icon: IconName; title: string; unit: string; value: number | null; times: number[]; series: Series[]; note: string;
+  id: string; icon: IconName; title: string; unit: string; value: number | null; times: number[]; series: Series[]; note?: string;
 }) {
   return (
     <section aria-labelledby={id} className="well p-5 sm:p-6">
@@ -327,7 +341,7 @@ function Metric({ id, icon, title, unit, value, times, series, note }: {
         {value !== null && <span className="ml-1 text-lg font-medium text-muted">{unit}</span>}
       </p>
       <LineChart label={`${title} ${span(times)} terakhir`} times={times} series={series} height={110} guess={300} unit={` ${unit}`} />
-      <p className="mt-3 text-xs text-ink-2">{note}</p>
+      {note && <p className="mt-3 text-xs text-muted">{note}</p>}
     </section>
   );
 }
@@ -384,10 +398,10 @@ function GasTable({ rows }: { rows: GasRow[] }) {
   );
 }
 
-function SensorCards({ counts, baseline, temp, hum }: { counts: number[]; baseline: number[] | null; temp: number | null; hum: number | null }) {
-  const card = "rounded-xl bg-ink/5 px-3 py-2.5 shadow-[inset_0_1px_2px_var(--well-shade)]";
+function SensorCards({ counts, baseline }: { counts: number[]; baseline: number[] | null }) {
+  const card = "rounded-xl bg-ink/5 px-3 py-2.5";
   return (
-    <ul className="mb-6 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
+    <ul className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
       {SENSORS.map((s, i) => {
         const now = counts[i], base = baseline?.[i];
         const delta = now > 0 && base ? ((now - base) / base) * 100 : null;
@@ -400,14 +414,6 @@ function SensorCards({ counts, baseline, temp, hum }: { counts: number[]; baseli
           </li>
         );
       })}
-      <li className={card}>
-        <p className="text-xs font-medium text-ink-2">Suhu</p>
-        <p className="mt-1 text-xl font-semibold tracking-tight">{temp === null ? "–" : `${fmt(Number(temp), 1)} °C`}</p>
-      </li>
-      <li className={card}>
-        <p className="text-xs font-medium text-ink-2">Kelembapan</p>
-        <p className="mt-1 text-xl font-semibold tracking-tight">{hum === null ? "–" : `${fmt(Number(hum), 0)} %`}</p>
-      </li>
     </ul>
   );
 }
@@ -415,7 +421,7 @@ function SensorCards({ counts, baseline, temp, hum }: { counts: number[]; baseli
 function HistoryTable({ rows, baseline, sessions, sp, page, hasNext }: {
   rows: Reading[]; baseline: number[] | null; sessions: Session[]; sp: Params; page: number; hasNext: boolean;
 }) {
-  const field = "h-9 rounded-xl border border-line bg-well px-2.5 text-sm text-ink shadow-[inset_0_1px_2px_var(--well-shade)] hover:border-muted focus-visible:border-moss";
+  const field = "h-9 rounded-xl border border-line bg-well px-2.5 text-sm text-ink hover:border-muted focus-visible:border-moss";
   const pager = "rounded-lg px-3 py-1.5 font-medium bg-ink/8 text-ink-2 hover:text-ink";
   return (
     <>
@@ -550,7 +556,7 @@ function Timeline({ segments }: { segments: Segment[] }) {
   const total = segments.at(-1)!.end - segments[0].start;
   return (
     <div>
-      <div className="flex h-9 overflow-hidden rounded-xl shadow-[inset_0_1px_3px_var(--well-shade)]" role="img"
+      <div className="flex h-9 overflow-hidden rounded-xl" role="img"
         aria-label={`Riwayat status ${dur(total)} terakhir`}>
         {segments.map((s) => {
           const tone = s.verdict === "gap" ? null : TONE[VERDICT[s.verdict].tone];
@@ -575,19 +581,18 @@ function Notice({ children }: { children: React.ReactNode }) {
 
 function HowItWorks() {
   const steps = [
-    { t: "Mengendus", d: "Nasi atau mi di bawah tutup sensor. 8 sensor gas MQ dan DHT11 membaca udaranya." },
-    { t: "ESP32", d: "ADS1115 mengubah sinyal sensor, ESP32 publish MQTT tiap 5 detik ke i2aspo/<alat>/telemetry." },
-    { t: "EMQX", d: "Broker MQTT meneruskan tiap pesan lewat Webhook ke server ENDUS." },
-    { t: "API", d: "/api/ingest memeriksa kunci rahasia dan isi data, lalu menyimpannya." },
-    { t: "Supabase", d: "Database menyimpan alat, sesi sampel, pembacaan, dan kalibrasi." },
-    { t: "Dashboard", d: "Respons gas dibandingkan dengan udara bersih, lalu jadi status." },
+    { t: "Mengendus", d: "8 sensor gas MQ dan DHT11 membaca udara di atas nasi atau mi." },
+    { t: "ESP32", d: "Mengirim data lewat MQTT tiap 5 detik." },
+    { t: "EMQX", d: "Broker meneruskan pesan ke server ENDUS." },
+    { t: "API", d: "Memeriksa kunci dan data, lalu menyimpannya." },
+    { t: "Supabase", d: "Menyimpan alat, sesi, pembacaan, dan kalibrasi." },
+    { t: "Dashboard", d: "Membandingkan gas dengan udara bersih, lalu jadi status." },
   ];
   return (
     <section id="cara-kerja" aria-labelledby="cara-h" className="mt-16 sm:mt-24">
       <h2 id="cara-h" className="text-3xl font-semibold tracking-tight sm:text-4xl">Cara kerja ENDUS</h2>
-      <p className="mt-3 max-w-[65ch] text-lg text-ink-2">
-        ENDUS, dari kata <em>mengendus</em>, mencium gas yang dilepas mikroba saat nasi dan mi mulai rusak di suhu ruang.
-        Yang dinilai kondisi makanannya, bukan sekadar berapa jam sudah disimpan.
+      <p className="mt-3 max-w-[60ch] text-lg text-ink-2">
+        ENDUS mencium gas dari mikroba saat nasi dan mi mulai rusak. Yang dinilai kondisi makanannya, bukan lama disimpan.
       </p>
 
       <ol className="mt-10 grid gap-6 lg:grid-cols-6 lg:gap-3">
@@ -605,7 +610,9 @@ function HowItWorks() {
         ))}
       </ol>
 
-      <div className="mt-14 grid gap-10 lg:grid-cols-2 lg:gap-16">
+      <div className="mt-12">
+      <More title="Kenapa bukan aturan 2 jam? Dasar status dan rujukan">
+      <div className="mt-4 grid gap-10 lg:grid-cols-2 lg:gap-16">
         <div>
           <h3 className="text-xl font-semibold">Kenapa bukan aturan 2 jam?</h3>
           <div className="mt-3 space-y-3 text-ink-2">
@@ -654,6 +661,8 @@ function HowItWorks() {
           <li>Health Protection Agency (2009). Guidelines for assessing the microbiological safety of ready-to-eat foods.</li>
         </ul>
       </div>
+      </More>
+      </div>
     </section>
   );
 }
@@ -676,7 +685,7 @@ function Empty() {
 
 function Skeleton() {
   return (
-    <div className="tray grid animate-pulse gap-2.5 lg:grid-cols-[1.65fr_1fr]" aria-busy="true" aria-label="Memuat data sensor">
+    <div className="tray grid animate-pulse gap-4 lg:grid-cols-[1.65fr_1fr]" aria-busy="true" aria-label="Memuat data sensor">
       <div className="well h-[28rem] lg:row-span-2" />
       <div className="well h-52" />
       <div className="well h-52" />
