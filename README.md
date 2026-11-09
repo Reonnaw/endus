@@ -25,8 +25,6 @@ The dashboard is server-rendered on every request and refreshes every 5 s.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | API Keys → publishable / legacy anon | yes, it can only read (RLS) |
 | `SUPABASE_SERVICE_ROLE_KEY` | API Keys → secret / legacy service_role | **no**, server only |
 | `INGEST_SECRET` | `openssl rand -hex 32` | **no**, server only |
-| `EMQX_API_URL` | EMQX dashboard address, e.g. `http://<host>:18083` | **no**, server only |
-| `EMQX_API_KEY`, `EMQX_API_SECRET` | EMQX Dashboard → System → API Key → Create | **no**, server only |
 
 The service role key is only read in `lib/supabase.ts`, which imports `server-only`, so a client component that imports it fails the build.
 Redeploy after changing env vars.
@@ -82,9 +80,10 @@ curl -s -XPOST "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/devices" -H "apikey: $NEXT_PUB
 
 ## Sessions
 
-The device publishes the session (`label|jam|catatan` on `i2aspo/<dev>/session`) inside every telemetry message (`lbl`, `hrs`, `note`).
+The sample label comes from the dashboard buttons (**Nasi / Mi / Tidak ada**, stored in `devices.sample_label`) and
+replaces the firmware's `lbl`. Hours and note still come from the device (`hrs`, `note`).
 A reading whose label is not `unknown` joins the device's open session. If the label, hours or note change, the open session is closed and a new one starts.
-Readings with `unknown` get no session.
+Readings with `unknown` get no session and close the open one.
 
 ## Calibration (required)
 

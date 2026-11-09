@@ -26,6 +26,10 @@ export async function insert(table: string, row: object) {
   await rest(table, { method: "POST", body: JSON.stringify(row), headers: { Prefer: "return=minimal" } }, true);
 }
 
+export async function update(table: string, filter: string, row: object) {
+  await rest(`${table}?${filter}`, { method: "PATCH", body: JSON.stringify(row), headers: { Prefer: "return=minimal" } }, true);
+}
+
 export async function rpc<T>(fn: string, args: object, admin = false): Promise<T> {
   return (await rest(`rpc/${fn}`, { method: "POST", body: JSON.stringify(args) }, admin)).json();
 }

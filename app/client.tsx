@@ -205,7 +205,7 @@ export function SampleButtons({ device, current }: { device: string; current: st
           );
         })}
       </div>
-      {msg && <p role="status" className={`text-sm font-medium ${msg.startsWith("Terkirim") ? "text-ok" : "text-bad"}`}>{msg}</p>}
+      {msg && <p role="status" className={`text-sm font-medium ${msg.startsWith("Tersimpan") ? "text-ok" : "text-bad"}`}>{msg}</p>}
     </form>
   );
 }

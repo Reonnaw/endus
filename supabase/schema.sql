@@ -25,6 +25,8 @@ create table if not exists public.devices (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- Set by the dashboard buttons (nasi / mi / tidak ada); overrides the label the firmware sends.
+alter table public.devices add column if not exists sample_label text not null default 'unknown';
 
 -- Server only: RLS on, no policies, no grants for anon/authenticated.
 create table if not exists public.device_secrets (
@@ -93,6 +95,8 @@ cross join lateral (
 ) r
 left join public.sessions s on s.id = r.session_id;
 
+-- d.* expands at creation, so a new devices column can only be added by recreating the view (grants are re-applied below).
+drop view if exists public.v_device_status;
 create or replace view public.v_device_status with (security_invoker = on) as
 select d.*,
   coalesce(d.last_seen_at > now() - interval '30 seconds', false) as online,
@@ -117,17 +121,18 @@ declare
   v_has_open boolean;
   v_session uuid;
   v_id bigint;
+  v_label text;
 begin
   insert into public.devices (device_code, last_seen_at) values (p_device_code, now())
   on conflict (device_code) do update set last_seen_at = now(), updated_at = now()
-  returning id into v_device;
+  returning id, sample_label into v_device, v_label;
 
-  if coalesce(p_label, 'unknown') not in ('', 'unknown') then
+  if coalesce(v_label, 'unknown') not in ('', 'unknown') then
     select * into v_open from public.sessions where device_id = v_device and ended_at is null for update;
     v_has_open := found;
     if v_has_open and p_recorded_at < v_open.started_at then
       v_session := null;  -- replayed reading older than the open session: leave sessions alone
-    elsif v_has_open and v_open.label = p_label
+    elsif v_has_open and v_open.label = v_label
       and v_open.planned_hours is not distinct from p_planned_hours
       and coalesce(v_open.note, '') = coalesce(p_note, '') then
       v_session := v_open.id;
@@ -136,7 +141,7 @@ begin
         update public.sessions set ended_at = p_recorded_at where id = v_open.id;
       end if;
       insert into public.sessions (device_id, label, note, planned_hours, started_at)
-      values (v_device, p_label, nullif(p_note, ''), p_planned_hours, p_recorded_at)
+      values (v_device, v_label, nullif(p_note, ''), p_planned_hours, p_recorded_at)
       returning id into v_session;
     end if;
   else
