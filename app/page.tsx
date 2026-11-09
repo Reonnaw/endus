@@ -3,7 +3,7 @@ import { SENSORS, THRESHOLD, type GasRow, type Verdict } from "@/lib/enose";
 import { countsOf, getDashboardData, PAGE_SIZE, RANGES, type RangeKey } from "@/lib/queries";
 import { computeStatus } from "@/lib/status";
 import type { DeviceStatus, Reading, Session } from "@/lib/supabase";
-import { AutoRefresh, CalibrateForm, LineChart, type Series } from "./client";
+import { AutoRefresh, CalibrateForm, LineChart, SensorArray3D, type Series } from "./client";
 import { Icon, Logo, type IconName } from "./icons";
 
 type Tone = "ok" | "warn" | "bad" | "idle";
@@ -230,6 +230,13 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
       <div className="tray grid gap-2.5 lg:grid-cols-[1.65fr_1fr] [&>*]:min-w-0">
         <section id="gas" aria-labelledby="gas-h" className="well p-5 sm:p-6">
           <Heading id="gas-h" icon="flask" title="Detail gas terdeteksi" sub="Perkiraan dari kurva datasheet tiap sensor MQ. Sensor MQ peka silang, jadi ini estimasi, bukan hasil lab." />
+          <SensorArray3D
+            calibrated={!!baseline} warn={THRESHOLD.waspada} bad={THRESHOLD.tidakLayak}
+            sensors={SENSORS.map((s, i) => ({
+              key: s.key, name: sensorName(s.key), formula: s.formula, verdict: s.verdict,
+              value: baseline ? now.rows.find((r) => r.key === s.key)?.response ?? null : counts[i] > 0 ? counts[i] : null,
+            }))}
+          />
           <SensorCards counts={counts} baseline={baseline} temp={latest.temperature_c} hum={latest.humidity_pct} />
           <GasTable rows={now.rows} />
         </section>

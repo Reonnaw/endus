@@ -4,14 +4,29 @@
 export const DEVICE_CODE = /^i2aspo-[A-Za-z0-9_-]{1,32}$/;
 const TOPIC = /^i2aspo\/[^/]+\/telemetry$/;
 
+// Counts arrive as an object keyed by sensor (sketch_nov8a.ino) or as an 8-element array in this order
+// (older firmware). The object may be in any key order; we always normalise here.
+const COUNT_KEYS = ["mq2", "mq3", "mq4", "mq5", "mq6", "mq7", "mq8", "mq135"] as const;
+
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
+const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= -32768 && v <= 32767;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const inRange = (v: unknown, lo: number, hi: number) => {
   const n = num(v);
   return n !== null && n >= lo && n <= hi ? n : null;
 };
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+/** 8 ADS1115 counts, either { mq2, …, mq135 } or [mq2, …, mq135]. */
+function countsOf(v: unknown): number[] | null {
+  if (Array.isArray(v)) return v.length === 8 && v.every(isCount) ? (v as number[]) : null;
+  if (isObj(v)) {
+    const out = COUNT_KEYS.map((k) => v[k]);
+    return out.every(isCount) ? (out as number[]) : null;
+  }
+  return null;
+}
 
 export type Parsed =
   | { ignored: true }
@@ -45,10 +60,8 @@ export function parseTelemetry(text: string, now = Date.now()): Parsed {
 
   const dev = typeof p.dev === "string" ? p.dev : "";
   if (!DEVICE_CODE.test(dev)) return { error: "dev must look like i2aspo-XXXXXX" };
-  const c = p.c;
-  if (!Array.isArray(c) || c.length !== 8 || !c.every((x) => Number.isInteger(x) && x >= -32768 && x <= 32767)) {
-    return { error: "c must be 8 integer counts" };
-  }
+  const c = countsOf(p.c);
+  if (!c) return { error: "c must be 8 integer counts" };
 
   // Buffered rows are replayed after reconnect, so trust the device clock once NTP has synced.
   const ep = num(p.ep);

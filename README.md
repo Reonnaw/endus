@@ -56,12 +56,16 @@ Responses: `200 {ok, device, reading_id, duplicate}`, `200 {ok, ignored}` for ot
 ```bash
 URL=https://endusku.vercel.app/api/ingest   # or http://localhost:3000/api/ingest
 S=<INGEST_SECRET>
-BODY='{"dev":"i2aspo-TEST01","ms":123456,"up":2,"pre":0,"ep":0,"lbl":"nasi","hrs":2.5,"note":"suhu ruang","c":[100,200,300,400,500,600,700,800],"t":27.5,"h":60}'
+BODY='{"dev":"i2aspo-TEST01","ms":123456,"up":2,"pre":0,"ep":0,"lbl":"nasi","hrs":2.5,"note":"suhu ruang","c":{"mq2":100,"mq3":200,"mq4":300,"mq5":400,"mq6":500,"mq7":600,"mq8":700,"mq135":800},"t":27.5,"h":60,"cal":0,"rg":1,"s":0}'
 curl -s -XPOST $URL -H "content-type: application/json" -H "x-ingest-secret: $S" -d "$BODY"            # 200
 curl -s -XPOST $URL -H "content-type: application/json" -H "x-ingest-secret: $S" -d "$BODY"            # 200 again; with ep>0 it says duplicate:true
 curl -s -XPOST $URL -H "content-type: application/json" -H "x-ingest-secret: salah" -d "$BODY"         # 401
 curl -s -XPOST $URL -H "content-type: application/json" -H "x-ingest-secret: $S" -d '{"dev":"x"}'     # 400
 ```
+
+`c` may be an object keyed by sensor (`mq2`…`mq135`, as sent by `sketch_nov8a.ino`) or an 8-element array in
+`mq2, mq3, mq4, mq5, mq6, mq7, mq8, mq135` order (older firmware). The firmware's `cal`, `rg` and `s` fields are
+kept in `readings.raw_payload`; the dashboard still computes its own status from the clean-air calibration.
 
 End to end with MQTTX: publish `$BODY` to `i2aspo/i2aspo-TEST01/telemetry`. A row appears in `readings` and the dashboard shows the device within 5 s.
 
