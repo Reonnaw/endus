@@ -7,7 +7,8 @@ import { calibrate } from "./actions";
 export function AutoRefresh({ ms }: { ms: number }) {
   const router = useRouter();
   useEffect(() => {
-    const id = setInterval(() => router.refresh(), ms);
+    // Hidden tabs skip the refresh: each one is a Vercel function invocation.
+    const id = setInterval(() => document.hidden || router.refresh(), ms);
     return () => clearInterval(id);
   }, [router, ms]);
   return null;

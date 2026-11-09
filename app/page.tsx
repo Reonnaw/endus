@@ -219,7 +219,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
 
         <section aria-labelledby="riwayat-data-h" className="well p-5 sm:p-6 lg:col-span-2">
           <More open={!!(sp.tgl || sp.sesi || sp.hal)} title={<h2 id="riwayat-data-h" className="text-base font-semibold text-ink">Semua pembacaan <span className="font-normal text-muted">(WIB, terbaru di atas)</span></h2>}>
-            <HistoryTable rows={history.slice(0, PAGE_SIZE)} baseline={baseline} sessions={sessions} sp={sp} page={page}
+            <HistoryTable rows={history.slice(0, PAGE_SIZE)} baseline={baseline} sessions={sessions} sp={sp} page={page} device={device.device_code}
               hasNext={history.length > PAGE_SIZE} />
           </More>
         </section>
@@ -418,8 +418,8 @@ function SensorCards({ counts, baseline }: { counts: number[]; baseline: number[
   );
 }
 
-function HistoryTable({ rows, baseline, sessions, sp, page, hasNext }: {
-  rows: Reading[]; baseline: number[] | null; sessions: Session[]; sp: Params; page: number; hasNext: boolean;
+function HistoryTable({ rows, baseline, sessions, sp, page, hasNext, device }: {
+  rows: Reading[]; baseline: number[] | null; sessions: Session[]; sp: Params; page: number; hasNext: boolean; device: string;
 }) {
   const field = "h-9 rounded-xl border border-line bg-well px-2.5 text-sm text-ink hover:border-muted focus-visible:border-moss";
   const pager = "rounded-lg px-3 py-1.5 font-medium bg-ink/8 text-ink-2 hover:text-ink";
@@ -443,6 +443,10 @@ function HistoryTable({ rows, baseline, sessions, sp, page, hasNext }: {
         </label>
         <button className="h-9 rounded-xl bg-moss px-4 font-semibold text-on-moss transition-colors hover:bg-moss-deep hover:text-well">Terapkan</button>
         {(sp.tgl || sp.sesi) && <a href={`${hrefWith(sp, { tgl: undefined, sesi: undefined, hal: undefined })}#riwayat-data-h`} className="px-2 py-2 text-ink-2 underline underline-offset-2 hover:text-ink">Reset</a>}
+        <a href={`/api/export${hrefWith({ tgl: sp.tgl, sesi: sp.sesi }, { dev: device })}`} download
+          className="ml-auto inline-flex h-9 items-center rounded-xl border border-line px-4 font-semibold text-ink-2 transition-colors hover:border-muted hover:text-ink">
+          Unduh CSV <span className="ml-1 font-normal text-muted">({sp.tgl || sp.sesi ? "filter ini" : "24 jam terakhir"})</span>
+        </a>
       </form>
       {rows.length === 0 ? (
         <Notice>Tidak ada data untuk filter ini.</Notice>
