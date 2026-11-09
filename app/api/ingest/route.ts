@@ -17,8 +17,15 @@ export async function POST(req: Request) {
   if (Buffer.byteLength(text) > MAX_BYTES) return Response.json({ error: "body too large" }, { status: 413 });
 
   const parsed = parseTelemetry(text);
-  if ("ignored" in parsed) return Response.json({ ok: true, ignored: true });
-  if ("error" in parsed) return Response.json({ error: parsed.error }, { status: 400 });
+  // EMQX counts both as "success"/"failed" without showing why, so the reason goes to the Vercel logs.
+  if ("ignored" in parsed) {
+    console.warn("ingest ignored:", text.slice(0, 300));
+    return Response.json({ ok: true, ignored: true });
+  }
+  if ("error" in parsed) {
+    console.warn("ingest rejected:", parsed.error, text.slice(0, 300));
+    return Response.json({ error: parsed.error }, { status: 400 });
+  }
 
   try {
     const id = await rpc<number | null>("ingest_telemetry", parsed.args, true);
